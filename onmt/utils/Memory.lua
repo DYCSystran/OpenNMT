@@ -1,16 +1,19 @@
 -- Allow tensor sharing for these modules.
 local supportedModules = {
-  'nn.Linear',
-  'nn.CMulTable',
-  'nn.MM',
-  'nn.Sum'
+  'nn.Identity',
+  --'nn.Dropout'
 }
 
+local hns={}
 local function isSupported(m)
   for i = 1, #supportedModules do
     if torch.typename(m) == supportedModules[i] then
       return true
     end
+  end
+  if not hns[torch.typename(m)] then
+    hns[torch.typename(m)]=true
+    print('not supported',torch.typename(m))
   end
   return false
 end
@@ -24,6 +27,26 @@ local function tensorIncluded(t, l)
         return true
       end
     end
+  end
+  return false
+end
+
+local hash={}
+local hashidx=1
+local function tensorDump(t)
+  if torch.isTensor(t) then
+    if t:dim()==0 then return "<>" end
+    if not hash[torch.pointer(t:storage())] then
+      hash[torch.pointer(t:storage())]=hashidx
+      hashidx=hashidx+1
+    end
+    return hash[torch.pointer(t:storage())]
+  elseif torch.type(t) == 'table' then
+    local T=""
+    for _, m in ipairs(t) do
+      T=T.." "..tensorDump(m)
+    end
+    return T
   end
   return false
 end
@@ -121,7 +144,9 @@ function Memory.optimize(model, criterion, batch, verbose)
 
   local totSize = 0
   local sharedSize = 0
-  for _, desc in pairs(modelDesc) do
+  for m, desc in pairs(modelDesc) do
+    print(m)
+    if m=='encoder' then
     for i = 1, #desc do
       local net = desc[i]['net']
       local base = desc[i]['base']
@@ -159,6 +184,11 @@ function Memory.optimize(model, criterion, batch, verbose)
           outputMap[globalIdx] = idx
           idx = idx + 1
         end
+        local gIshare='-'
+        if m.gradInputSharedIdx then gIshare='*' end
+        local Oshare='-'
+        if m.outputSharedIdx then Oshare='*' end
+        print(torch.typename(m),gIshare,tensorDump(m.gradInput),Oshare, tensorDump(m.output))
         globalIdx = globalIdx + 1
       end)
 
@@ -178,6 +208,7 @@ function Memory.optimize(model, criterion, batch, verbose)
       -- Restore function on network backward/forward interception input.
       net.backward = nil
       net.forward = nil
+    end
     end
   end
 
