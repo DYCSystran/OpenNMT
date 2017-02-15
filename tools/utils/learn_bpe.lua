@@ -20,6 +20,7 @@ cmd:option('-bpe_mode', 'suffix', [[Define the mode for bpe - 'prefix': Append '
 'suffix': Append '﹥' to the end of each word to learn suffix-oriented pair statistics, as in the original python script;
 'both': suffix and prefix; 'none': no suffix nor prefix]])
 cmd:option('-save_bpe', '', [[Path to save the output model]])
+cmd:option('-save_vocab', '', [[Path to save the output model]])
 
 --Logger.declareOpts(cmd)
 
@@ -60,6 +61,7 @@ local function replace(word, bigram)
       end
     end
   end
+  if merge then table.insert(new_word, word[#word]) end
   return table.concat(new_word, " ")
 end
 
@@ -253,12 +255,17 @@ local function main()
   local f = assert(io.open(opt.save_bpe, 'w'))
   f:write(table.concat(bpe_options, ";") .. "\n")
 
+  local tmpstats = {}
   for i = 1, opt.size do
     local most_frequent = maxKey(stats)
     if stats[most_frequent] < 2 then
       io.stderr:write("No pair has frequency > 1. Stopping\n")
       break
     end
+
+    local merge_bigram = string.gsub(most_frequent, " ", "")
+    tmpstats[merge_bigram] = stats[most_frequent]
+
     local changed = replace_pair(most_frequent, sorted_vocab, indices)
     update_pair_statistics(most_frequent, changed, stats, indices)
     stats[most_frequent] = 0
@@ -266,6 +273,22 @@ local function main()
     if i % 1000 == 0 then _G.logger:info('... ' .. i .. ' merge operations generated') end
   end
   f:close()
+  if (opt.save_vocab ~= '') then
+    local fvocab = assert(io.open(opt.save_vocab, 'w'))
+    local output = {}
+    for i = 1, #sorted_vocab do
+      local tmp = sorted_vocab[i]
+      local w = string.gsub(tmp[1], " ", "")
+      table.insert(tmp, 1, w)
+      local subtoks = string.split(tmp[2], " ")
+      for j = 1, #subtoks do
+        table.insert(tmp, tmpstats[subtoks[j]])
+      end
+      table.insert(output, table.concat(tmp, "\t"))
+    end
+    fvocab:write(table.concat(output, "\n"))
+    fvocab:close()
+  end
 end
 
 main()
