@@ -46,8 +46,12 @@ Two options provide specific tokenization depending on alphabet:
 OpenNMT's BPE module fully supports the [original BPE](https://github.com/rsennrich/subword-nmt) as default mode:
 
 ```bash
-tools/learn_bpe.lua -size 30000 -save_bpe codes < input
-tools/tokenize.lua -bpe_model codes < input
+tools/tokenize.lua TOK_OPTIONS < input > input_tokenized
+tools/learn_bpe.lua -size 30000 -save_bpe codes < input_tokenized
+
+# The same TOK_OPTIONS should be applied as the pre-tokenization for BPE model training
+# Additional JOINNER_OPTIONS can be used ONLY at this stage, enabling detokenization
+tools/tokenize.lua TOK_OPTIONS JOINER_OPTIONS -bpe_model codes < input
 ```
 
 with two additional features:
@@ -71,12 +75,16 @@ constitution --> consti￨l tu￨l tion￨l
 If you want a *caseless* split so that you can take the best from using case feature, and you can achieve that with the following command lines:
 
 ```bash
+tools/tokenize.lua TOK_OPTIONS < input > input_tokenized
+
 # We don't need BPE to care about case
-tools/learn_bpe.lua -size 30000 -save_bpe codes_lc < input_lowercased
+tools/learn_bpe.lua -size 30000 -lc -save_bpe codes_lc < input_tokenized
 
 # The case information is preserved in the true case input
-tools/tokenize.lua -bpe_model codes_lc -bpe_case_insensitive < input
+tools/tokenize.lua TOK_OPTIONS JOINER_OPTIONS -bpe_model codes_lc < input
 ```
+!!! note "Note"
+    If the BPE model is learnt by the original python learn_bpe.py, use `-bpe_case_sensitive` option to the above command line and make sure that this model are learnt over lowercased train data. This option is automatically overridden, thus has no effect, if the BPE model is learnt by OpenNMT style learn_bpe.lua.
 
 The output of the previous example would be:
 
