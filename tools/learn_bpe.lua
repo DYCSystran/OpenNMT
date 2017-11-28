@@ -4,7 +4,13 @@ require('onmt.init')
 local tokenizer = require('tools.utils.tokenizer')
 local unicode = require('tools.utils.unicode')
 local separators = require('tools.utils.separators')
+local AC = require('tools.utils.aho-corasick')
 local tds = require('tds')
+
+package.cpath = "/export/home/deng/projects/NRM/OpenNMT/tools/utils/?.so;" .. package.cpath
+--package.cpath = "?.so;" .. package.cpath
+local ac = require ('tools.utils.load_ac')
+--local ac = require ('load_ac')
 
 local cmd = onmt.utils.ExtendedCmdLine.new('learn_bpe.lua')
 
@@ -12,6 +18,10 @@ local options = {
   {
     '-size', '30000',
     [[The number of merge operations to learn.]]
+  },
+  {
+    '-dict', '',
+    [[Dictionary file defining vocabulary for calculating statistics]]
   },
   {
     '-bpe_mode', 'suffix',
@@ -151,6 +161,35 @@ local function get_vocabulary()
     l = io.read()
     count = count + 1
     if count % 100000 == 0 then _G.logger:info('... ' .. count .. ' sentences processed') end
+  end
+  if opt.dict ~= '' then
+    local dict = assert(io.open(opt.dict, 'r'))
+    local vocab_dict = {}
+    local vocab_dict_ac_matches = tds.Hash()
+    local entry = dict:read("*line")
+    while not (entry == nil) do
+      if unicode.utf8len(entry) > 1 then
+        table.insert(vocab_dict, entry)
+      end
+      entry = dict:read("*line")
+    end
+    local ac_create = ac.create_ac
+    local ac_match = ac.match
+    local ac_inst = ac_create(vocab_dict);
+    for k, v in pairs(vocab) do
+      local b = ac_match(ac_inst, k)
+      if #b > 0 then
+        for i = 1, #b do
+          local cand = vocab_dict[b[i]]
+          if unicode.utf8len(cand) > 1 then
+            vocab_dict_ac_matches[cand] = (vocab_dict_ac_matches[cand] or 0 ) + 1
+          end
+        end
+      elseif unicode.utf8len(k) > 1 and not string.match(k, "%d") then
+        vocab_dict_ac_matches[k] = v
+      end
+    end
+    vocab = vocab_dict_ac_matches
   end
   local vocabreal = tds.Hash()
   for k, v in pairs(vocab) do

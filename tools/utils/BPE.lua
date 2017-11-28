@@ -95,6 +95,9 @@ function BPE:minPair(pairsTable)
 end
 
 function BPE:encode(l)
+  if string.find(l, "^__ent") then
+    return {l}
+  end
   local word = str2word(l, self.case_insensitive)
   if #word == 1 then
     word[1] = l

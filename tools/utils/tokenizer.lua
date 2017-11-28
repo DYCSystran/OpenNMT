@@ -342,7 +342,15 @@ end
 
 function tokenizer.tokenize(opt, line, bpe)
   -- tokenize
-  local tokens = tokenize(line, opt)
+  local tokens
+  local split = function (sep, t)
+    local fields = {}
+    local pattern = string.format("([^%s]+)", sep)
+    t:gsub(pattern, function(c) fields[#fields+1] = c end)
+    return fields
+  end
+
+  tokens = tokenize(line, opt)
 
   -- apply segmetn feature if requested
   if opt.segment_case then
